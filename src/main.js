@@ -2,6 +2,7 @@
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
 import './main.css';
+import router from './router';
 import App from './App.vue';
 
 /**
@@ -14,6 +15,7 @@ const app = createApp(App);
 // Создаём и подключаем Pinia (state management)
 const pinia = createPinia();
 app.use(pinia);
+app.use(router);
 
 // Монтируем приложение в DOM
 app.mount('#app');
