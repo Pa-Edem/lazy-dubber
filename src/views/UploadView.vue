@@ -67,6 +67,9 @@
 
       <p v-if="!canProceed" class="upload-view__hint">Загрузите оба файла для продолжения</p>
     </div>
+
+    <!-- Сайдбар субтитров -->
+    <SubtitlesSidebar />
   </div>
 </template>
 
@@ -75,6 +78,7 @@ import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useFilesStore } from '../stores/filesStore';
 import FileUploadZone from '../components/FileUploadZone.vue';
+import SubtitlesSidebar from '../components/SubtitlesSidebar.vue';
 
 const router = useRouter();
 const filesStore = useFilesStore();

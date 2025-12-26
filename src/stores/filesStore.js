@@ -1,5 +1,7 @@
 // src/stores/filesStore.js
 import { defineStore } from 'pinia';
+import { useVttParser } from '../composables/useVttParser';
+import { useSubtitlesStore } from './subtitlesStore';
 
 export const useFilesStore = defineStore('files', {
   state: () => ({
@@ -36,6 +38,10 @@ export const useFilesStore = defineStore('files', {
       if (!state.vtt.name) return '';
       return state.vtt.name.replace(/\.[^/.]+$/, '').toLowerCase();
     },
+    // Готовы ли файлы к воспроизведению (видео загружено, VTT распарсен без ошибок)
+    isReadyToPlay: (state) => {
+      return Boolean(state.video.file && state.vtt.file && !state.video.error && !state.vtt.error);
+    },
   },
 
   actions: {
@@ -58,18 +64,54 @@ export const useFilesStore = defineStore('files', {
       this.checkNamesMatch();
     },
 
-    // Устанавливаем VTT файл
-    setVttFile(fileData) {
+    // Устанавливаем VTT файл и автоматически парсим его
+    async setVttFile(fileData) {
+      // Сохраняем данные файла
       this.vtt = {
         file: fileData.file,
         content: fileData.content,
         name: fileData.name,
         size: fileData.size,
-        error: null,
+        error: null, // Сбрасываем предыдущую ошибку
       };
 
       // Проверяем соответствие имён
       this.checkNamesMatch();
+
+      // Получаем subtitles store
+      const subtitlesStore = useSubtitlesStore();
+
+      // Очищаем предыдущие субтитры
+      subtitlesStore.clearSubtitles();
+
+      // Начинаем парсинг
+      subtitlesStore.setLoading(true);
+
+      try {
+        // Парсим VTT файл
+        const { parseVttText } = useVttParser();
+        const result = await parseVttText(fileData.content);
+
+        if (result.success) {
+          // Успешно распарсили - сохраняем в subtitles store
+          subtitlesStore.setSubtitles(result.data);
+          console.log(`✅ VTT успешно распарсен: ${result.data.length} субтитров`);
+        } else {
+          // Ошибка парсинга - сохраняем текст ошибки
+          this.vtt.error = result.error;
+          subtitlesStore.setError(result.error);
+          console.error('❌ Ошибка парсинга VTT:', result.error);
+        }
+      } catch (error) {
+        // Неожиданная ошибка
+        const errorMessage = `Неожиданная ошибка: ${error.message}`;
+        this.vtt.error = errorMessage;
+        subtitlesStore.setError(errorMessage);
+        console.error('❌ Критическая ошибка парсинга:', error);
+      } finally {
+        // Всегда выключаем загрузку
+        subtitlesStore.setLoading(false);
+      }
     },
 
     // Устанавливаем ошибку для видео
@@ -111,6 +153,10 @@ export const useFilesStore = defineStore('files', {
       };
 
       this.checkNamesMatch();
+
+      // Очищаем субтитры в subtitles store
+      const subtitlesStore = useSubtitlesStore();
+      subtitlesStore.clearSubtitles();
     },
 
     // Проверяем, совпадают ли имена файлов

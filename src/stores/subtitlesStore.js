@@ -1,247 +1,106 @@
 // src/stores/subtitlesStore.js
 import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
-import { APP_CONFIG } from '../constants/config';
 
-/**
- * Store для субтитров и переводов
- * Управляет кэшем, прогрессом перевода, синхронизацией с видео
- */
-export const useSubtitlesStore = defineStore('subtitles', () => {
-  // === Исходные данные ===
-  const originalSubtitles = ref([]); // Массив исходных субтитров из VTT
-  const videoFileName = ref(''); // Имя видеофайла (для кэша)
-  const vttHash = ref(''); // Хэш VTT-файла (для проверки актуальности)
+export const useSubtitlesStore = defineStore('subtitles', {
+  state: () => ({
+    items: [], // Массив распарсенных субтитров
+    isLoading: false, // Идёт ли парсинг прямо сейчас
+    error: null, // Текст ошибки если парсинг не удался
+    totalCount: 0, // Общее количество субтитров
+    duration: 0, // Общая длительность видео (в секундах)
+  }),
 
-  // === Переведённые субтитры ===
-  // Структура: { index: 0, original: "Hello", translated: "Привет", start: 1.5, end: 3.2 }
-  const translatedSubtitles = ref([]);
+  getters: {
+    /**
+     * Есть ли загруженные субтитры
+     */
+    hasSubtitles: (state) => state.items.length > 0,
 
-  // === Прогресс перевода ===
-  const totalSubtitles = ref(0); // Всего субтитров
-  const translatedCount = ref(0); // Переведено субтитров
-  const isTranslating = ref(false); // Идёт ли перевод сейчас
-  const translationError = ref(null); // Ошибка перевода
+    /**
+     * Форматированная длительность для отображения
+     */
+    formattedDuration: (state) => {
+      const hours = Math.floor(state.duration / 3600);
+      const minutes = Math.floor((state.duration % 3600) / 60);
+      const seconds = Math.floor(state.duration % 60);
 
-  // === Текущий субтитр (синхронизация с видео) ===
-  const currentSubtitleIndex = ref(-1); // Индекс текущего субтитра (-1 = нет)
+      if (hours > 0) {
+        return `${hours}ч ${minutes}м`;
+      }
+      return `${minutes}м ${seconds}с`;
+    },
 
-  // === Computed (вычисляемые свойства) ===
+    /**
+     * Есть ли ошибка
+     */
+    hasError: (state) => state.error !== null,
+  },
 
-  /**
-   * Прогресс перевода в процентах (0-100)
-   */
-  const translationProgress = computed(() => {
-    if (totalSubtitles.value === 0) return 0;
-    return Math.round((translatedCount.value / totalSubtitles.value) * 100);
-  });
+  actions: {
+    /**
+     * Сохраняет распарсенные субтитры в store
+     * @param {Array} subtitles - Массив объектов субтитров
+     */
+    setSubtitles(subtitles) {
+      this.items = subtitles;
+      this.totalCount = subtitles.length;
 
-  /**
-   * Готово ли видео к просмотру (первые 10 минут переведены)
-   */
-  const isReadyToWatch = computed(() => {
-    // Ищем последний субтитр в первых 10 минутах
-    const tenMinutesInSeconds = APP_CONFIG.INITIAL_TRANSLATE_MINUTES * 60;
-    const initialSubtitlesCount = originalSubtitles.value.findIndex((sub) => sub.start > tenMinutesInSeconds);
-
-    // Если все субтитры короче 10 минут, берём все
-    const requiredCount = initialSubtitlesCount === -1 ? originalSubtitles.value.length : initialSubtitlesCount;
-
-    return translatedCount.value >= requiredCount;
-  });
-
-  /**
-   * Текущий активный субтитр (объект)
-   */
-  const currentSubtitle = computed(() => {
-    if (currentSubtitleIndex.value === -1) return null;
-    return translatedSubtitles.value[currentSubtitleIndex.value] || null;
-  });
-
-  // === Actions (методы) ===
-
-  /**
-   * Устанавливает исходные субтитры из VTT-файла
-   */
-  function setOriginalSubtitles(subtitles, fileName, hash) {
-    originalSubtitles.value = subtitles;
-    videoFileName.value = fileName;
-    vttHash.value = hash;
-    totalSubtitles.value = subtitles.length;
-    translatedCount.value = 0;
-    translatedSubtitles.value = [];
-    currentSubtitleIndex.value = -1;
-  }
-
-  /**
-   * Добавляет переведённый субтитр
-   */
-  function addTranslation(index, translatedText) {
-    const original = originalSubtitles.value[index];
-    if (!original) {
-      console.warn(`Субтитр с индексом ${index} не найден`);
-      return;
-    }
-
-    translatedSubtitles.value[index] = {
-      index,
-      original: original.text,
-      translated: translatedText,
-      start: original.start,
-      end: original.end,
-    };
-
-    translatedCount.value++;
-  }
-
-  /**
-   * Загружает переводы из кэша
-   */
-  function loadFromCache() {
-    const cacheKey = `${APP_CONFIG.CACHE_KEY_PREFIX}${videoFileName.value}`;
-    const cached = localStorage.getItem(cacheKey);
-
-    if (!cached) return false;
-
-    try {
-      const parsed = JSON.parse(cached);
-
-      // Проверяем актуальность (совпадает ли хэш VTT)
-      if (parsed.subtitle_hash !== vttHash.value) {
-        console.log('Кэш устарел (другой VTT-файл), перезаписываем');
-        return false;
+      // Вычисляем общую длительность из последнего субтитра
+      if (subtitles.length > 0) {
+        const lastSubtitle = subtitles[subtitles.length - 1];
+        this.duration = lastSubtitle.endTime;
       }
 
-      // Восстанавливаем переводы
-      translatedSubtitles.value = parsed.translations;
-      translatedCount.value = parsed.translations.length;
+      // Очищаем ошибку если была
+      this.error = null;
+    },
 
-      console.log(`Загружено из кэша: ${translatedCount.value} переводов`);
-      return true;
-    } catch (error) {
-      console.error('Ошибка загрузки кэша:', error);
-      return false;
-    }
-  }
+    /**
+     * Устанавливает состояние загрузки
+     * @param {boolean} loading - Идёт ли загрузка
+     */
+    setLoading(loading) {
+      this.isLoading = loading;
+    },
 
-  /**
-   * Сохраняет переводы в кэш
-   */
-  function saveToCache() {
-    const cacheKey = `${APP_CONFIG.CACHE_KEY_PREFIX}${videoFileName.value}`;
-    const cacheData = {
-      subtitle_hash: vttHash.value,
-      translations: translatedSubtitles.value,
-      cachedAt: Date.now(),
-    };
+    /**
+     * Устанавливает ошибку парсинга
+     * @param {string} errorMessage - Текст ошибки
+     */
+    setError(errorMessage) {
+      this.error = errorMessage;
+      this.isLoading = false;
+    },
 
-    try {
-      localStorage.setItem(cacheKey, JSON.stringify(cacheData));
-      console.log('Кэш сохранён');
-    } catch (error) {
-      console.error('Ошибка сохранения кэша:', error);
-      // Возможно, localStorage переполнен
-      if (error.name === 'QuotaExceededError') {
-        console.warn('localStorage переполнен, очищаем старые кэши');
-        clearOldCaches();
-        // Пробуем ещё раз
-        try {
-          localStorage.setItem(cacheKey, JSON.stringify(cacheData));
-        } catch (e) {
-          console.error('Не удалось сохранить даже после очистки:', e);
-        }
-      }
-    }
-  }
+    /**
+     * Очищает все субтитры и сбрасывает состояние
+     */
+    clearSubtitles() {
+      this.items = [];
+      this.totalCount = 0;
+      this.duration = 0;
+      this.error = null;
+      this.isLoading = false;
+    },
 
-  /**
-   * Очищает все кэши переводов
-   */
-  function clearAllCaches() {
-    const keys = Object.keys(localStorage);
-    const cacheKeys = keys.filter((key) => key.startsWith(APP_CONFIG.CACHE_KEY_PREFIX));
+    /**
+     * Получает субтитр по индексу
+     * @param {number} index - Индекс субтитра
+     * @returns {Object|null}
+     */
+    getSubtitleByIndex(index) {
+      return this.items[index] || null;
+    },
 
-    cacheKeys.forEach((key) => localStorage.removeItem(key));
-    console.log(`Удалено ${cacheKeys.length} кэшей`);
-  }
-
-  /**
-   * Очищает старые кэши (старше 30 дней)
-   */
-  function clearOldCaches() {
-    const keys = Object.keys(localStorage);
-    const cacheKeys = keys.filter((key) => key.startsWith(APP_CONFIG.CACHE_KEY_PREFIX));
-    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-
-    let deletedCount = 0;
-    cacheKeys.forEach((key) => {
-      try {
-        const cached = JSON.parse(localStorage.getItem(key));
-        if (cached.cachedAt < thirtyDaysAgo) {
-          localStorage.removeItem(key);
-          deletedCount++;
-        }
-      } catch (e) {
-        // Повреждённый кэш, удаляем
-        localStorage.removeItem(key);
-        deletedCount++;
-      }
-    });
-
-    console.log(`Удалено ${deletedCount} старых кэшей`);
-  }
-
-  /**
-   * Находит субтитр по времени видео
-   */
-  function findSubtitleByTime(currentTime) {
-    const index = translatedSubtitles.value.findIndex(
-      (sub) => sub && sub.start <= currentTime && sub.end >= currentTime
-    );
-    currentSubtitleIndex.value = index;
-    return index;
-  }
-
-  /**
-   * Сбрасывает состояние store
-   */
-  function reset() {
-    originalSubtitles.value = [];
-    translatedSubtitles.value = [];
-    videoFileName.value = '';
-    vttHash.value = '';
-    totalSubtitles.value = 0;
-    translatedCount.value = 0;
-    isTranslating.value = false;
-    translationError.value = null;
-    currentSubtitleIndex.value = -1;
-  }
-
-  return {
-    // State
-    originalSubtitles,
-    translatedSubtitles,
-    videoFileName,
-    vttHash,
-    totalSubtitles,
-    translatedCount,
-    isTranslating,
-    translationError,
-    currentSubtitleIndex,
-
-    // Computed
-    translationProgress,
-    isReadyToWatch,
-    currentSubtitle,
-
-    // Actions
-    setOriginalSubtitles,
-    addTranslation,
-    loadFromCache,
-    saveToCache,
-    clearAllCaches,
-    clearOldCaches,
-    findSubtitleByTime,
-    reset,
-  };
+    /**
+     * Находит активный субтитр по времени видео
+     * @param {number} currentTime - Текущее время видео в секундах
+     * @returns {Object|null}
+     */
+    findActiveSubtitle(currentTime) {
+      return (
+        this.items.find((subtitle) => currentTime >= subtitle.startTime && currentTime <= subtitle.endTime) || null
+      );
+    },
+  },
 });
