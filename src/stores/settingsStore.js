@@ -1,7 +1,7 @@
 // src/stores/settingsStore.js
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import { APP_CONFIG } from '@/constants/config';
+import { APP_CONFIG } from '../constants/config';
 
 /**
  * Store для пользовательских настроек
