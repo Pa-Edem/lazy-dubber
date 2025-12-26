@@ -1,0 +1,55 @@
+# .gitignore
+
+# === Зависимости ===
+node_modules/
+.pnp
+.pnp.js
+
+# === Сборка ===
+dist/
+dist-ssr/
+*.local
+
+# === Редакторы ===
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# === Логи ===
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# === Операционные системы ===
+.DS_Store
+Thumbs.db
+
+# === Переменные окружения ===
+.env
+.env.local
+.env.*.local
+
+# === Временные файлы ===
+*.tmp
+*.temp
+.cache/
+
+# === Firebase (добавим позже) ===
+.firebase/
+firebase-debug.log
+firestore-debug.log
+
+# === Тестовые файлы (ваши видео и субтитры) ===
+# Не коммитим большие тестовые файлы!
+/test-videos/
+/test-subtitles/
+*.mp4
+*.mkv
+*.webm
+*.vtt
