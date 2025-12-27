@@ -1,6 +1,7 @@
 // src/router/index.js
 import { createRouter, createWebHistory } from 'vue-router';
 import UploadView from '../views/UploadView.vue';
+import TestGemini from '@/components/TestGemini.vue';
 
 /**
  * Определяем маршруты приложения
@@ -12,8 +13,11 @@ const routes = [
     name: 'upload',
     component: UploadView,
   },
-  // На следующих этапах здесь появятся:
-  // { path: '/player', name: 'player', component: PlayerView }
+  {
+    path: '/test-gemini',
+    name: 'test-gemini',
+    component: TestGemini,
+  },
 ];
 
 /**

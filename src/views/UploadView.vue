@@ -55,6 +55,16 @@
         </div>
       </transition>
 
+      <!-- Прогресс перевода -->
+      <TranslationProgress
+        v-if="subtitlesStore.hasSubtitles"
+        :is-translating="isTranslating"
+        :progress="translationProgress"
+        :error="translationError"
+        :total-subtitles="totalSubtitles"
+        @retry="retryTranslation"
+      />
+
       <!-- Кнопка для перехода к следующему этапу -->
       <div class="upload-view__actions">
         <button
@@ -93,16 +103,26 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useFilesStore } from '../stores/filesStore';
 import { usePlayerStore } from '../stores/playerStore';
+import { useSubtitlesStore } from '../stores/subtitlesStore';
+import { useVttParser } from '../composables/useVttParser';
+import translationService from '../services/translationService';
 import FileUploadZone from '../components/FileUploadZone.vue';
 import SubtitlesSidebar from '../components/SubtitlesSidebar.vue';
 import VideoPlayer from '../components/VideoPlayer.vue';
-import { useVideoPlayer } from '../composables/useVideoPlayer';
+import TranslationProgress from '../components/TranslationProgress.vue';
 
 const filesStore = useFilesStore();
 const playerStore = usePlayerStore();
+const subtitlesStore = useSubtitlesStore();
+const { parseVttText } = useVttParser();
+
+// ========== Состояние перевода ==========
+const translationProgress = ref(0);
+const translationError = ref(null);
+const isParsingVtt = ref(false);
 
 // ==========================================
 // COMPUTED PROPERTIES
@@ -160,8 +180,20 @@ const buttonText = computed(() => {
     return 'Загрузите субтитры';
   }
 
+  if (isParsingVtt.value) {
+    return 'Парсинг субтитров...';
+  }
+
+  if (subtitlesStore.isTranslating) {
+    return `Перевод... ${translationProgress.value}%`;
+  }
+
   return 'Продолжить →';
 });
+
+// ========== Computed для прогресса ==========
+const isTranslating = computed(() => subtitlesStore.isTranslating);
+const totalSubtitles = computed(() => subtitlesStore.totalCount);
 
 // ==========================================
 // METHODS
@@ -171,7 +203,7 @@ const buttonText = computed(() => {
  * Обработчик клика по кнопке "Продолжить"
  * Копирует файлы из filesStore в playerStore и переключает экран
  */
-const handleProceed = () => {
+const handleProceed = async () => {
   if (!canProceed.value) {
     return;
   }
@@ -180,10 +212,36 @@ const handleProceed = () => {
   console.log('📹 Видео:', filesStore.video);
   console.log('📝 VTT:', filesStore.vtt);
 
-  // Копируем файлы в playerStore
-  // Это активирует плеер (playerStore.isReady станет true)
-  playerStore.setVideoFile(filesStore.video.file);
-  playerStore.setVttFile(filesStore.vtt.file);
+  // ========== Парсинг VTT и запуск перевода ==========
+  try {
+    isParsingVtt.value = true;
+
+    // Читаем VTT файл как текст
+    const vttText = await readFileAsText(filesStore.vtt.file);
+
+    // Парсим VTT
+    const parseResult = await parseVttText(vttText);
+
+    if (!parseResult.success) {
+      alert(`Ошибка парсинга VTT: ${parseResult.error}`);
+      isParsingVtt.value = false;
+      return;
+    }
+
+    console.log('✅ VTT parsed:', parseResult.data.length, 'subtitles');
+    isParsingVtt.value = false;
+
+    // Запускаем перевод
+    await startTranslation();
+
+    // Копируем файлы в playerStore
+    playerStore.setVideoFile(filesStore.video.file);
+    playerStore.setVttFile(filesStore.vtt.file);
+  } catch (error) {
+    console.error('❌ Error processing files:', error);
+    alert(`Ошибка обработки файлов: ${error.message}`);
+    isParsingVtt.value = false;
+  }
 };
 
 /**
@@ -193,9 +251,84 @@ const handleProceed = () => {
 const handleBack = () => {
   // Сбрасываем состояние плеера
   playerStore.reset();
-
+  subtitlesStore.reset();
+  translationProgress.value = 0;
+  translationError.value = null;
   console.log('⬅️ Возврат к загрузке файлов');
 };
+
+/**
+ * Читает файл как текст
+ */
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      resolve(e.target.result);
+    };
+
+    reader.onerror = () => {
+      reject(new Error('Не удалось прочитать файл'));
+    };
+
+    reader.readAsText(file);
+  });
+}
+
+/**
+ * Запускает перевод субтитров
+ */
+async function startTranslation() {
+  const subtitles = subtitlesStore.items;
+  const vttContent = subtitlesStore.vttContent;
+
+  if (subtitles.length === 0) {
+    console.warn('[UploadView] No subtitles to translate');
+    return;
+  }
+
+  console.log('[UploadView] Starting translation for', subtitles.length, 'subtitles');
+
+  subtitlesStore.setTranslatingStatus(true);
+  translationProgress.value = 0;
+  translationError.value = null;
+
+  try {
+    await translationService.translateSubtitles(subtitles, {
+      vttContent,
+      onProgress: (progress) => {
+        translationProgress.value = progress;
+        subtitlesStore.setTranslationProgress(progress);
+        console.log('[UploadView] Translation progress:', progress + '%');
+      },
+      onComplete: () => {
+        console.log('[UploadView] Translation complete!');
+        subtitlesStore.setTranslatingStatus(false);
+      },
+      onError: (error) => {
+        console.error('[UploadView] Translation error:', error);
+        translationError.value = error.message;
+        subtitlesStore.setTranslationError(error);
+        subtitlesStore.setTranslatingStatus(false);
+      },
+    });
+  } catch (error) {
+    console.error('[UploadView] Translation failed:', error);
+    translationError.value = error.message;
+    subtitlesStore.setTranslationError(error);
+    subtitlesStore.setTranslatingStatus(false);
+  }
+}
+
+/**
+ * Повторная попытка перевода
+ */
+function retryTranslation() {
+  translationError.value = null;
+  subtitlesStore.setTranslationError(null);
+  startTranslation();
+}
 </script>
 
 <style scoped>

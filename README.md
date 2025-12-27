@@ -15,9 +15,12 @@ lazy-dubber
 │  ├─ assets
 │  ├─ components
 │  │  ├─ FileUploadZone.vue
-│  │  └─ SubtitlesSidebar.vue
+│  │  ├─ PlayerControls.vue
+│  │  ├─ SubtitlesSidebar.vue
+│  │  └─ VideoPlayer.vue
 │  ├─ composables
 │  │  ├─ useFileUpload.js
+│  │  ├─ useVideoPlayer.js
 │  │  └─ useVttParser.js
 │  ├─ constants
 │  │  └─ config.js

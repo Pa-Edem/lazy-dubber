@@ -1,9 +1,11 @@
 import { WebVTTParser } from 'webvtt-parser';
+import { useSubtitlesStore } from '../stores/subtitlesStore';
 
 /**
  * Композабл для парсинга VTT текста
  */
 export function useVttParser() {
+  const subtitlesStore = useSubtitlesStore();
   /**
    * Парсит VTT текст и возвращает массив субтитров
    * @param {string} vttText - Содержимое VTT файла как строка
@@ -19,6 +21,10 @@ export function useVttParser() {
           error: 'VTT текст пустой',
         };
       }
+
+      // Сохраняем VTT контент для кэширования
+      subtitlesStore.setVttContent(vttText);
+      console.log('[useVttParser] VTT content saved to store');
 
       // Создаём экземпляр парсера
       const parser = new WebVTTParser();
@@ -50,6 +56,10 @@ export function useVttParser() {
         translation: null,
       }));
 
+      // Сохраняем субтитры в store
+      subtitlesStore.setSubtitles(subtitles);
+      console.log('[useVttParser] Subtitles saved to store:', subtitles.length);
+
       return {
         success: true,
         data: subtitles,
@@ -57,6 +67,8 @@ export function useVttParser() {
       };
     } catch (error) {
       console.error('VTT parsing error:', error);
+      // Сохраняем ошибку в store
+      subtitlesStore.setError(error.message);
       return {
         success: false,
         data: [],

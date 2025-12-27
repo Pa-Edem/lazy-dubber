@@ -61,7 +61,13 @@
             <div class="divider"></div>
             <!-- Место для перевода -->
             <div class="translation-text">
-              {{ subtitle.translation || '[перевод появится позже]' }}
+              <template v-if="getTranslation(index)"> 🇷🇺 {{ getTranslation(index) }} </template>
+              <template v-else-if="subtitlesStore.isTranslating">
+                <span class="loading-indicator">⏳ Перевод...</span>
+              </template>
+              <template v-else>
+                <span class="pending-translation">[Перевод появится позже]</span>
+              </template>
             </div>
           </div>
         </div>
@@ -71,7 +77,7 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick } from 'vue';
+import { ref, computed, watch, nextTick } from 'vue';
 import { usePlayerStore } from '../stores/playerStore';
 import { useSubtitlesStore } from '../stores/subtitlesStore';
 import { formatTime } from '../utils/timeFormatter';
@@ -129,6 +135,13 @@ function onSubtitleClick(index) {
   playerStore.seekTo(subtitle.startTime);
 
   console.log(`🎯 Переход к субтитру #${index} (время: ${subtitle.startTime})`);
+}
+
+/**
+ * Получить перевод для субтитра по индексу
+ */
+function getTranslation(index) {
+  return subtitlesStore.getTranslation(index);
 }
 
 /**
@@ -197,7 +210,7 @@ watch(
   position: fixed;
   top: 70px;
   right: 20px;
-  width: 300px;
+  width: 400px;
   height: calc(100vh - 90px);
   background-color: #ffffff;
   border: 1px solid #e2e8f0;
@@ -234,6 +247,28 @@ watch(
   to {
     transform: rotate(360deg);
   }
+}
+
+.loading-indicator {
+  color: #a0aec0;
+  font-size: 13px;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Ожидание перевода */
+.pending-translation {
+  color: #cbd5e0;
+  font-size: 13px;
 }
 
 /* Состояние ошибки */
@@ -340,7 +375,7 @@ watch(
 .translation-text {
   font-size: 14px;
   line-height: 1.6;
-  color: #718096;
+  color: #001d4a;
   font-style: italic;
 }
 /* ==========================================
