@@ -11,6 +11,7 @@ export const usePlayerStore = defineStore('player', () => {
   const isPlaying = ref(false); // Играет ли видео
   const currentTime = ref(0); // Текущее время в секундах
   const duration = ref(0); // Длительность видео в секундах
+  const currentSubtitleIndex = ref(-1); // Индекс активного субтитра (-1 = нет активного)
   const volume = ref(1.0); // Громкость (0.0 - 1.0)
   const originalVolume = ref(1.0); // Оригинальная громкость (до ducking)
   const isDucking = ref(false); // Активно ли приглушение звука
@@ -46,9 +47,11 @@ export const usePlayerStore = defineStore('player', () => {
 
   /**
    * Готов ли плеер к воспроизведению
+   * Проверяем только наличие файлов
+   * Duration будет установлен позже, после загрузки метаданных
    */
   const isReady = computed(() => {
-    return videoFile.value !== null && vttFile.value !== null && duration.value > 0;
+    return videoFile.value !== null && vttFile.value !== null;
   });
 
   // === Actions ===
@@ -85,6 +88,13 @@ export const usePlayerStore = defineStore('player', () => {
    */
   function updateDuration(time) {
     duration.value = time;
+  }
+
+  /**
+   * Устанавливает индекс текущего активного субтитра
+   */
+  function setCurrentSubtitleIndex(index) {
+    currentSubtitleIndex.value = index;
   }
 
   /**
@@ -144,6 +154,7 @@ export const usePlayerStore = defineStore('player', () => {
     volume.value = 1.0;
     originalVolume.value = 1.0;
     isDucking.value = false;
+    currentSubtitleIndex.value = -1;
 
     // Освобождаем blob URL
     if (videoUrl.value) {
@@ -161,6 +172,7 @@ export const usePlayerStore = defineStore('player', () => {
     currentTime,
     duration,
     volume,
+    currentSubtitleIndex,
     originalVolume,
     isDucking,
     videoFile,
@@ -179,6 +191,7 @@ export const usePlayerStore = defineStore('player', () => {
     updateCurrentTime,
     updateDuration,
     togglePlay,
+    setCurrentSubtitleIndex,
     setPlaying,
     setVolume,
     enableDucking,

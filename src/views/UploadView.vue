@@ -1,89 +1,112 @@
 <!-- src/views/UploadView.vue -->
 <template>
   <div class="upload-view">
-    <!-- Заголовок страницы -->
-    <header class="upload-view__header">
-      <h1 class="upload-view__title">Lazy Dubber</h1>
-      <p class="upload-view__subtitle">Загрузите видео и субтитры для начала работы</p>
-    </header>
+    <!-- ЭКРАН 1: Загрузка файлов (показываем ЕСЛИ плеер не готов) -->
+    <div v-if="!playerStore.isReady" class="upload-screen">
+      <!-- Заголовок страницы -->
+      <header class="upload-view__header">
+        <h1 class="upload-view__title">Lazy Dubber</h1>
+        <p class="upload-view__subtitle">Загрузите видео и субтитры для начала работы</p>
+      </header>
 
-    <!-- Зоны загрузки -->
-    <div class="upload-view__zones">
-      <FileUploadZone file-type="video" title="Видео файл" />
-
-      <FileUploadZone file-type="vtt" title="Файл субтитров (.vtt)" />
-    </div>
-
-    <!-- Предупреждение о несовпадении имён -->
-    <transition name="warning">
-      <div v-if="showNamesMismatchWarning" class="upload-view__warning">
-        <div class="warning-card">
-          <div class="warning-card__icon">⚠️</div>
-          <div class="warning-card__content">
-            <h3 class="warning-card__title">Имена файлов не совпадают</h3>
-            <p class="warning-card__text">
-              Видео: <strong>{{ videoFileName }}</strong
-              ><br />
-              Субтитры: <strong>{{ vttFileName }}</strong>
-            </p>
-            <p class="warning-card__hint">
-              Рекомендуется использовать одинаковые имена для корректной синхронизации. Вы можете продолжить, но
-              возможны проблемы.
-            </p>
-          </div>
-        </div>
+      <!-- Зоны загрузки -->
+      <div class="upload-view__zones">
+        <FileUploadZone file-type="video" title="Видео файл" />
+        <FileUploadZone file-type="vtt" title="Файл субтитров (.vtt)" />
       </div>
-    </transition>
 
-    <!-- Информация о загруженных файлах -->
-    <transition name="fade">
-      <div v-if="showFilesInfo" class="upload-view__info">
-        <div class="info-card">
-          <h3 class="info-card__title">✓ Файлы загружены</h3>
-          <div class="info-card__details">
-            <div class="info-item">
-              <span class="info-item__label">Видео:</span>
-              <span class="info-item__value">{{ videoFileName }}</span>
-            </div>
-            <div class="info-item">
-              <span class="info-item__label">Субтитры:</span>
-              <span class="info-item__value">{{ vttFileName }}</span>
+      <!-- Предупреждение о несовпадении имён -->
+      <transition name="warning">
+        <div v-if="showNamesMismatchWarning" class="upload-view__warning">
+          <div class="warning-card">
+            <div class="warning-card__icon">⚠️</div>
+            <div class="warning-card__content">
+              <h3 class="warning-card__title">Имена файлов не совпадают</h3>
+              <p class="warning-card__text">
+                Видео: <strong>{{ videoFileName }}</strong
+                ><br />
+                Субтитры: <strong>{{ vttFileName }}</strong>
+              </p>
+              <p class="warning-card__hint">
+                Рекомендуется использовать одинаковые имена для корректной синхронизации. Вы можете продолжить, но
+                возможны проблемы.
+              </p>
             </div>
           </div>
         </div>
+      </transition>
+
+      <!-- Информация о загруженных файлах -->
+      <transition name="fade">
+        <div v-if="showFilesInfo" class="upload-view__info">
+          <div class="info-card">
+            <h3 class="info-card__title">✓ Файлы загружены</h3>
+            <div class="info-card__details">
+              <div class="info-item">
+                <span class="info-item__label">Видео:</span>
+                <span class="info-item__value">{{ videoFileName }}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-item__label">Субтитры:</span>
+                <span class="info-item__value">{{ vttFileName }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </transition>
+
+      <!-- Кнопка для перехода к следующему этапу -->
+      <div class="upload-view__actions">
+        <button
+          class="btn-primary"
+          :class="{ 'btn-primary--disabled': !canProceed }"
+          :disabled="!canProceed"
+          @click="handleProceed"
+        >
+          {{ buttonText }}
+        </button>
+
+        <p v-if="!canProceed" class="upload-view__hint">Загрузите оба файла для продолжения</p>
       </div>
-    </transition>
 
-    <!-- Кнопка для перехода к следующему этапу -->
-    <div class="upload-view__actions">
-      <button
-        class="btn-primary"
-        :class="{ 'btn-primary--disabled': !canProceed }"
-        :disabled="!canProceed"
-        @click="handleProceed"
-      >
-        {{ buttonText }}
-      </button>
-
-      <p v-if="!canProceed" class="upload-view__hint">Загрузите оба файла для продолжения</p>
+      <!-- Сайдбар субтитров (для этапа 3) -->
+      <SubtitlesSidebar />
     </div>
 
-    <!-- Сайдбар субтитров -->
-    <SubtitlesSidebar />
+    <!-- ЭКРАН 2: Плеер (показываем ЕСЛИ плеер готов) -->
+    <div v-else class="player-screen">
+      <!-- Кнопка "Назад" -->
+      <button class="back-button" @click="handleBack">← Загрузить другие файлы</button>
+
+      <!-- Основная область с плеером и субтитрами -->
+      <div class="player-layout">
+        <!-- Видеоплеер -->
+        <div class="player-section">
+          <VideoPlayer />
+        </div>
+      </div>
+
+      <!-- Сайдбар субтитров -->
+      <SubtitlesSidebar />
+    </div>
   </div>
 </template>
 
 <script setup>
 import { computed } from 'vue';
-import { useRouter } from 'vue-router';
 import { useFilesStore } from '../stores/filesStore';
+import { usePlayerStore } from '../stores/playerStore';
 import FileUploadZone from '../components/FileUploadZone.vue';
 import SubtitlesSidebar from '../components/SubtitlesSidebar.vue';
+import VideoPlayer from '../components/VideoPlayer.vue';
+import { useVideoPlayer } from '../composables/useVideoPlayer';
 
-const router = useRouter();
 const filesStore = useFilesStore();
+const playerStore = usePlayerStore();
 
-// Computed properties
+// ==========================================
+// COMPUTED PROPERTIES
+// ==========================================
 
 /**
  * Проверяем, можно ли перейти к следующему этапу
@@ -95,9 +118,6 @@ const canProceed = computed(() => {
 
 /**
  * Показывать ли предупреждение о несовпадении имён
- * Показываем только если:
- * 1. Оба файла загружены
- * 2. Имена не совпадают
  */
 const showNamesMismatchWarning = computed(() => {
   return filesStore.video.file && filesStore.vtt.file && !filesStore.namesMatch;
@@ -105,7 +125,6 @@ const showNamesMismatchWarning = computed(() => {
 
 /**
  * Показывать ли информацию о загруженных файлах
- * Показываем, если оба файла загружены и имена совпадают
  */
 const showFilesInfo = computed(() => {
   return filesStore.video.file && filesStore.vtt.file && filesStore.namesMatch;
@@ -144,34 +163,54 @@ const buttonText = computed(() => {
   return 'Продолжить →';
 });
 
-// Методы
+// ==========================================
+// METHODS
+// ==========================================
 
 /**
  * Обработчик клика по кнопке "Продолжить"
- * Переход к следующему этапу (будет реализован позже)
+ * Копирует файлы из filesStore в playerStore и переключает экран
  */
 const handleProceed = () => {
   if (!canProceed.value) {
     return;
   }
 
-  // TODO: На следующих этапах здесь будет переход к парсингу и плееру
-  // Пока просто выводим в консоль для проверки
-  console.log('Переход к следующему этапу');
-  console.log('Видео:', filesStore.video);
-  console.log('VTT:', filesStore.vtt);
+  console.log('✅ Переход к плееру');
+  console.log('📹 Видео:', filesStore.video);
+  console.log('📝 VTT:', filesStore.vtt);
 
-  // В будущем здесь будет:
-  // router.push('/player');
+  // Копируем файлы в playerStore
+  // Это активирует плеер (playerStore.isReady станет true)
+  playerStore.setVideoFile(filesStore.video.file);
+  playerStore.setVttFile(filesStore.vtt.file);
+};
+
+/**
+ * Обработчик кнопки "Назад"
+ * Возвращает на экран загрузки
+ */
+const handleBack = () => {
+  // Сбрасываем состояние плеера
+  playerStore.reset();
+
+  console.log('⬅️ Возврат к загрузке файлов');
 };
 </script>
 
 <style scoped>
 .upload-view {
+  min-height: 100vh;
+}
+
+/* ==========================================
+   ЭКРАН ЗАГРУЗКИ
+   ========================================== */
+
+.upload-screen {
   max-width: 800px;
   margin: 0 auto;
   padding: 2rem;
-  min-height: 100vh;
 }
 
 /* Заголовок */
@@ -188,11 +227,12 @@ const handleProceed = () => {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   -webkit-background-clip: text;
   background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .upload-view__subtitle {
   font-size: 1.1rem;
-  color: #2b313b;
+  color: #718096;
 }
 
 /* Зоны загрузки */
@@ -340,6 +380,43 @@ const handleProceed = () => {
   font-size: 0.9rem;
 }
 
+/* ==========================================
+   ЭКРАН ПЛЕЕРА
+   ========================================== */
+
+.player-screen {
+  padding: 20px;
+  min-height: 100vh;
+}
+
+.back-button {
+  background: #f7fafc;
+  border: 1px solid #e2e8f0;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #4a5568;
+  transition: all 0.2s ease;
+  margin-bottom: 20px;
+}
+
+.back-button:hover {
+  background: #edf2f7;
+  border-color: #cbd5e0;
+  transform: translateX(-2px);
+}
+
+.player-layout {
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+.player-section {
+  width: 100%;
+}
+
 /* Анимации переходов */
 .warning-enter-active,
 .warning-leave-active {
@@ -373,7 +450,7 @@ const handleProceed = () => {
 
 /* Адаптивность */
 @media (max-width: 768px) {
-  .upload-view {
+  .upload-screen {
     padding: 1rem;
   }
 

@@ -1,3 +1,5 @@
+<!-- // src/components/SubtitlesSidebar.vue -->
+
 <template>
   <div class="subtitles-sidebar">
     <!-- Кнопка показать/скрыть -->
@@ -35,21 +37,28 @@
         </div>
 
         <!-- Скроллируемый список -->
-        <div class="list-scroll">
-          <div v-for="subtitle in subtitlesStore.items" :key="subtitle.id" class="subtitle-item">
+        <div class="list-scroll" ref="listScroll">
+          <div
+            v-for="(subtitle, index) in subtitlesStore.items"
+            :key="subtitle.id"
+            :ref="(el) => setSubtitleRef(el, index)"
+            class="subtitle-item"
+            :class="{
+              active: index === playerStore.currentSubtitleIndex,
+              clickable: true,
+            }"
+            @click="onSubtitleClick(index)"
+          >
             <!-- Временная метка -->
             <div class="timestamp">
               {{ formatTime(subtitle.startTime) }}
             </div>
-
             <!-- Оригинальный текст -->
             <div class="original-text">
               {{ subtitle.text }}
             </div>
-
             <!-- Разделитель -->
             <div class="divider"></div>
-
             <!-- Место для перевода -->
             <div class="translation-text">
               {{ subtitle.translation || '[перевод появится позже]' }}
@@ -62,12 +71,27 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, watch, nextTick } from 'vue';
+import { usePlayerStore } from '../stores/playerStore';
 import { useSubtitlesStore } from '../stores/subtitlesStore';
 import { formatTime } from '../utils/timeFormatter';
 
 // Получаем store
 const subtitlesStore = useSubtitlesStore();
+// Получаем playerStore для синхронизации
+const playerStore = usePlayerStore();
+
+/**
+ * Ref на контейнер прокрутки
+ * Используется для автопрокрутки к активному субтитру
+ */
+const listScroll = ref(null);
+
+/**
+ * Массив refs на элементы субтитров
+ * Каждый элемент списка получит свой ref
+ */
+const subtitleRefs = ref([]);
 
 // Локальное состояние видимости сайдбара
 const isVisible = ref(false);
@@ -78,6 +102,59 @@ const isVisible = ref(false);
 function toggleSidebar() {
   isVisible.value = !isVisible.value;
 }
+
+/**
+ * Устанавливаем ref для элемента субтитра
+ * Вызывается из template через :ref="..."
+ */
+function setSubtitleRef(el, index) {
+  if (el) {
+    subtitleRefs.value[index] = el;
+  }
+}
+
+/**
+ * Обработчик клика по субтитру
+ * Перематывает видео на начало этого субтитра
+ */
+function onSubtitleClick(index) {
+  const subtitle = subtitlesStore.items[index];
+
+  if (!subtitle) {
+    console.warn('Субтитр не найден');
+    return;
+  }
+
+  // Напрямую используем playerStore для перемотки
+  playerStore.seekTo(subtitle.startTime);
+
+  console.log(`🎯 Переход к субтитру #${index} (время: ${subtitle.startTime})`);
+}
+
+/**
+ * Автоматическая прокрутка к активному субтитру
+ * Срабатывает при изменении currentSubtitleIndex
+ */
+watch(
+  () => playerStore.currentSubtitleIndex,
+  (newIndex) => {
+    if (newIndex === -1) return; // Нет активного субтитра
+
+    // Ждём следующий тик Vue для обновления DOM
+    nextTick(() => {
+      const activeElement = subtitleRefs.value[newIndex];
+
+      if (activeElement && listScroll.value) {
+        // Прокручиваем так, чтобы элемент был в центре видимой области
+        activeElement.scrollIntoView({
+          behavior: 'smooth', // Плавная прокрутка
+          block: 'center', // Элемент в центре экрана
+          inline: 'nearest', // Не прокручивать по горизонтали
+        });
+      }
+    });
+  }
+);
 </script>
 
 <style scoped>
@@ -120,7 +197,7 @@ function toggleSidebar() {
   position: fixed;
   top: 70px;
   right: 20px;
-  width: 400px;
+  width: 300px;
   height: calc(100vh - 90px);
   background-color: #ffffff;
   border: 1px solid #e2e8f0;
@@ -265,5 +342,62 @@ function toggleSidebar() {
   line-height: 1.6;
   color: #718096;
   font-style: italic;
+}
+/* ==========================================
+   АКТИВНЫЙ СУБТИТР (ПОДСВЕТКА)
+   ========================================== */
+
+.subtitle-item.active {
+  background-color: #ebf8ff; /* Светло-голубой фон */
+  border-left: 4px solid #3182ce; /* Синяя полоска слева */
+  padding-left: 12px; /* Компенсация за border */
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(49, 130, 206, 0.1);
+}
+
+.subtitle-item.active .timestamp {
+  color: #2c5282; /* Более тёмный синий для времени */
+  font-weight: 700;
+}
+
+.subtitle-item.active .original-text {
+  color: #1a202c; /* Чёрный текст для лучшей читаемости */
+  font-weight: 500;
+}
+
+/* ==========================================
+   КЛИКАБЕЛЬНЫЙ СУБТИТР
+   ========================================== */
+
+.subtitle-item.clickable {
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+.subtitle-item.clickable:hover {
+  background-color: #f7fafc;
+  transform: translateX(4px); /* Лёгкий сдвиг при наведении */
+}
+
+/* Активный + hover */
+.subtitle-item.active.clickable:hover {
+  background-color: #bee3f8; /* Чуть темнее при наведении */
+}
+
+/* ==========================================
+   АНИМАЦИЯ ПОЯВЛЕНИЯ АКТИВНОГО
+   ========================================== */
+
+@keyframes highlight {
+  0% {
+    background-color: #bee3f8;
+  }
+  100% {
+    background-color: #ebf8ff;
+  }
+}
+
+.subtitle-item.active {
+  animation: highlight 0.5s ease;
 }
 </style>
