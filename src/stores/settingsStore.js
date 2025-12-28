@@ -8,6 +8,8 @@ import { APP_CONFIG } from '../constants/config';
  * Сохраняется в localStorage при изменении
  */
 export const useSettingsStore = defineStore('settings', () => {
+  // === Настройки видео ===
+  const videoFrameWidth = ref(100);
   // === Настройки озвучки ===
   const voiceRate = ref(APP_CONFIG.DEFAULT_VOICE_RATE);
   const voicePitch = ref(APP_CONFIG.DEFAULT_VOICE_PITCH);
@@ -15,7 +17,9 @@ export const useSettingsStore = defineStore('settings', () => {
   const autoAdjustRate = ref(APP_CONFIG.RATE_AUTO_ADJUST);
 
   // Выбранный голос из системы
-  const selectedVoice = ref(null);
+  // const selectedVoice = ref(null);
+  // Вместо сохранения всего объекта голоса, сохраняем только имя
+  const selectedVoiceName = ref(null);
 
   // === Audio Ducking ===
   const duckingLevel = ref(APP_CONFIG.DEFAULT_DUCKING_LEVEL);
@@ -32,11 +36,13 @@ export const useSettingsStore = defineStore('settings', () => {
       const parsed = JSON.parse(saved);
       voiceRate.value = parsed.voiceRate ?? voiceRate.value;
       voicePitch.value = parsed.voicePitch ?? voicePitch.value;
-      voiceVolume.value = parsed.voiceVolume ?? voiceVolume.value;
+      voiceVolume.value = parsed.voiceVolume ?? 100;
       autoAdjustRate.value = parsed.autoAdjustRate ?? autoAdjustRate.value;
       duckingLevel.value = parsed.duckingLevel ?? duckingLevel.value;
       isDubbingEnabled.value = parsed.isDubbingEnabled ?? isDubbingEnabled.value;
-      selectedVoice.value = parsed.selectedVoice ?? null;
+      // selectedVoice.value = parsed.selectedVoice ?? null;
+      selectedVoiceName.value = parsed.selectedVoiceName ?? null;
+      videoFrameWidth.value = parsed.videoFrameWidth ?? 100;
     }
   }
 
@@ -51,7 +57,9 @@ export const useSettingsStore = defineStore('settings', () => {
       autoAdjustRate: autoAdjustRate.value,
       duckingLevel: duckingLevel.value,
       isDubbingEnabled: isDubbingEnabled.value,
-      selectedVoice: selectedVoice.value,
+      // selectedVoice: selectedVoice.value,
+      selectedVoiceName: selectedVoiceName.value,
+      videoFrameWidth: videoFrameWidth.value,
     };
     localStorage.setItem('lazy_dubber_settings', JSON.stringify(settings));
   }
@@ -66,7 +74,9 @@ export const useSettingsStore = defineStore('settings', () => {
     autoAdjustRate.value = APP_CONFIG.RATE_AUTO_ADJUST;
     duckingLevel.value = APP_CONFIG.DEFAULT_DUCKING_LEVEL;
     isDubbingEnabled.value = true;
-    selectedVoice.value = null;
+    // selectedVoice.value = null;
+    selectedVoiceName.value = null;
+    videoFrameWidth.value = 100;
     saveSettings();
   }
 
@@ -76,9 +86,11 @@ export const useSettingsStore = defineStore('settings', () => {
     voicePitch,
     voiceVolume,
     autoAdjustRate,
-    selectedVoice,
+    // selectedVoice,
+    selectedVoiceName,
     duckingLevel,
     isDubbingEnabled,
+    videoFrameWidth,
 
     // Actions
     loadSettings,

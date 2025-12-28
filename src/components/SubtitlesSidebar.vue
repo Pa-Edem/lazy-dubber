@@ -1,14 +1,8 @@
 <!-- // src/components/SubtitlesSidebar.vue -->
-
 <template>
   <div class="subtitles-sidebar">
-    <!-- Кнопка показать/скрыть -->
-    <button class="toggle-button" @click="toggleSidebar" :class="{ 'sidebar-hidden': !isVisible }">
-      {{ isVisible ? '← Скрыть субтитры' : 'Показать субтитры →' }}
-    </button>
-
     <!-- Сайдбар с субтитрами -->
-    <div v-show="isVisible" class="sidebar-content">
+    <div class="sidebar-content">
       <!-- Состояние: Загрузка -->
       <div v-if="subtitlesStore.isLoading" class="state-container">
         <div class="spinner"></div>
@@ -34,6 +28,26 @@
           <span class="duration">
             {{ subtitlesStore.formattedDuration }}
           </span>
+          <!-- Кнопки управления -->
+          <div v-if="subtitlesStore.hasSubtitles" class="sidebar-actions">
+            <!-- Кнопка экспорта VTT -->
+            <button
+              class="action-button export-button"
+              :disabled="!canExport"
+              @click="exportTranslatedVtt"
+              title="Скачать переведённые субтитры в формате VTT"
+            >
+              <span class="button-icon">💾</span>
+            </button>
+            <!-- Кнопка очистки кэша -->
+            <button
+              class="action-button clear-button"
+              @click="clearAllCache"
+              title="Очистить кэш переводов и настройки"
+            >
+              <span class="button-icon">🗑️</span>
+            </button>
+          </div>
         </div>
 
         <!-- Скроллируемый список -->
@@ -81,11 +95,15 @@ import { ref, computed, watch, nextTick } from 'vue';
 import { usePlayerStore } from '../stores/playerStore';
 import { useSubtitlesStore } from '../stores/subtitlesStore';
 import { formatTime } from '../utils/timeFormatter';
+import { generateVttContent, downloadVttFile, generateExportFilename } from '../utils/vttExporter';
+import translationService from '../services/translationService';
+import { useSettingsStore } from '../stores/settingsStore';
+import { useFilesStore } from '../stores/filesStore';
 
-// Получаем store
+const settingsStore = useSettingsStore();
 const subtitlesStore = useSubtitlesStore();
-// Получаем playerStore для синхронизации
 const playerStore = usePlayerStore();
+const filesStore = useFilesStore();
 
 /**
  * Ref на контейнер прокрутки
@@ -99,14 +117,35 @@ const listScroll = ref(null);
  */
 const subtitleRefs = ref([]);
 
-// Локальное состояние видимости сайдбара
-const isVisible = ref(false);
+/**
+ * Можно ли экспортировать VTT?
+ * Условия:
+ * 1. Перевод завершён (не в процессе)
+ * 2. Есть хотя бы 1 перевод
+ * 3. Файл НЕ был загружен как уже переведённый
+ */
+const canExport = computed(() => {
+  // Проверяем имя загруженного VTT файла
+  const vttFileName = filesStore.vtt.file?.name || '';
+  const isAlreadyTranslated =
+    vttFileName.toLowerCase().endsWith('_ru.vtt') || vttFileName.toLowerCase().endsWith('.ru.vtt');
+
+  // Если файл уже переведённый - экспорт не нужен
+  if (isAlreadyTranslated) {
+    return false;
+  }
+
+  // Обычная логика
+  return !subtitlesStore.isTranslating && Object.keys(subtitlesStore.translations).length > 0;
+});
 
 /**
- * Переключает видимость сайдбара
+ * Показываем уведомление пользователю
  */
-function toggleSidebar() {
-  isVisible.value = !isVisible.value;
+function showNotification(message, type = 'info') {
+  // Простая реализация через alert (можно заменить на toast библиотеку)
+  alert(message);
+  console.log(`[${type.toUpperCase()}] ${message}`);
 }
 
 /**
@@ -145,6 +184,53 @@ function getTranslation(index) {
 }
 
 /**
+ * Экспорт переведённых субтитров в VTT
+ */
+function exportTranslatedVtt() {
+  try {
+    // Генерируем контент VTT
+    const vttContent = generateVttContent(subtitlesStore.items, subtitlesStore.translations);
+
+    // Получаем имя оригинального видео файла
+    const filesStore = useFilesStore();
+    const videoFilename = filesStore.video.file?.name || 'video';
+
+    // Формируем имя для экспорта
+    const exportFilename = generateExportFilename(videoFilename);
+
+    // Скачиваем файл
+    downloadVttFile(vttContent, exportFilename);
+
+    showNotification(`Файл "${exportFilename}" успешно скачан!`, 'success');
+  } catch (error) {
+    console.error('Ошибка экспорта VTT:', error);
+    showNotification('Не удалось экспортировать субтитры', 'error');
+  }
+}
+
+/**
+ * Очистка всего кэша и настроек
+ */
+function clearAllCache() {
+  try {
+    // 1. Очищаем кэш переводов из localStorage
+    const removedCount = translationService.clearAllCache();
+
+    // 2. Очищаем переводы из store
+    subtitlesStore.clearTranslations();
+
+    // 3. Сбрасываем настройки к дефолтным
+    settingsStore.resetSettings();
+
+    console.log(`✅ Очищено ${removedCount} записей кэша`);
+    showNotification('Кэш очищен', 'success');
+  } catch (error) {
+    console.error('Ошибка очистки кэша:', error);
+    showNotification('Не удалось очистить кэш', 'error');
+  }
+}
+
+/**
  * Автоматическая прокрутка к активному субтитру
  * Срабатывает при изменении currentSubtitleIndex
  */
@@ -173,51 +259,23 @@ watch(
 <style scoped>
 /* Контейнер всего компонента */
 .subtitles-sidebar {
-  position: relative;
-}
-
-/* Кнопка переключения */
-.toggle-button {
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  padding: 10px 20px;
-  background-color: #4a5568;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  transition: background-color 0.2s;
-  z-index: 100;
-}
-
-.toggle-button:hover {
-  background-color: #2d3748;
-}
-
-.toggle-button.sidebar-hidden {
-  background-color: #4a5568;
-}
-
-.toggle-button.sidebar-hidden:hover {
-  background-color: #2d3748;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Основной контейнер сайдбара */
 .sidebar-content {
-  position: fixed;
-  top: 70px;
-  right: 20px;
-  width: 400px;
-  height: calc(100vh - 90px);
+  width: 100%;
+  height: 100%;
   background-color: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   overflow: hidden;
-  z-index: 50;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Контейнеры для состояний (загрузка, ошибка, пусто) */
@@ -302,8 +360,10 @@ watch(
 /* Заголовок списка */
 .list-header {
   display: flex;
-  justify-content: space-between;
-  padding: 16px 20px;
+  justify-content: center;
+  align-items: center;
+  padding: 8px 20px;
+  gap: 16px;
   background-color: #f7fafc;
   border-bottom: 1px solid #e2e8f0;
   font-size: 13px;
@@ -434,5 +494,69 @@ watch(
 
 .subtitle-item.active {
   animation: highlight 0.5s ease;
+}
+
+/* ==========================================
+   ПАНЕЛЬ КНОПОК УПРАВЛЕНИЯ
+   ========================================== */
+
+.sidebar-actions {
+  background-color: #f7fafc;
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.action-button {
+  flex: 1;
+  padding: 8px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.button-icon {
+  font-size: 16px;
+}
+
+/* Кнопка экспорта */
+.export-button {
+  background-color: #48bb78;
+  color: white;
+}
+
+.export-button:hover:not(:disabled) {
+  background-color: #38a169;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(72, 187, 120, 0.3);
+}
+
+.export-button:disabled {
+  background-color: #cbd5e0;
+  color: #a0aec0;
+  cursor: not-allowed;
+}
+
+/* Кнопка очистки */
+.clear-button {
+  background-color: #fc8181;
+  color: white;
+}
+
+.clear-button:hover {
+  background-color: #f56565;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(252, 129, 129, 0.3);
+}
+
+.clear-button:active {
+  transform: translateY(0);
 }
 </style>

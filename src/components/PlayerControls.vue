@@ -1,5 +1,4 @@
 <!-- src/components/PlayerControls.vue -->
-
 <template>
   <div class="player-controls">
     <!-- Прогресс-бар (таймлайн) -->
@@ -78,15 +77,34 @@
           />
         </div>
       </div>
+
+      <!-- Панель размера фрейма -->
+      <div class="frame-size-controls">
+        <span class="size-label">Размер:</span>
+        <button
+          v-for="option in frameSizeOptions"
+          :key="option.value || 'fullscreen'"
+          class="size-btn"
+          :class="{ active: settingsStore.videoFrameWidth === option.value && !isFullscreen }"
+          @click="setFrameSize(option.value)"
+          :title="`Размер фрейма ${option.label}`"
+        >
+          {{ option.label }}
+        </button>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, inject } from 'vue';
+import { ref, onMounted, inject } from 'vue';
 import { usePlayerStore } from '../stores/playerStore';
 import { useSettingsStore } from '../stores/settingsStore';
-import { useVideoPlayer } from '../composables/useVideoPlayer';
+
+/**
+ * Проверяем находимся ли в полноэкранном режиме
+ */
+const isFullscreen = ref(false);
 
 // ==========================================
 // STORES
@@ -175,6 +193,60 @@ const toggleDubbing = () => {
 
   console.log('🎙️ Озвучка:', settingsStore.isDubbingEnabled ? 'ВКЛ' : 'ВЫКЛ');
 };
+
+// ==========================================
+// УПРАВЛЕНИЕ РАЗМЕРОМ ФРЕЙМА
+// ==========================================
+
+/**
+ * Доступные размеры фрейма
+ * null = полноэкранный режим
+ */
+const frameSizeOptions = [
+  { value: 50, label: '50%' },
+  { value: 75, label: '75%' },
+  { value: 100, label: '100%' },
+  { value: null, label: 'Fullscreen' },
+];
+
+/**
+ * Установить размер фрейма
+ */
+const setFrameSize = (size) => {
+  if (size === null) {
+    // Полноэкранный режим
+    toggleFullscreen();
+  } else {
+    // Обычный режим с заданной шириной
+    settingsStore.videoFrameWidth = size;
+    settingsStore.saveSettings();
+    console.log('📐 Размер фрейма:', size + '%');
+  }
+};
+
+/**
+ * Переключение полноэкранного режима
+ */
+const toggleFullscreen = () => {
+  const videoContainer = document.querySelector('.video-container');
+
+  if (!document.fullscreenElement) {
+    // Войти в полноэкранный режим
+    videoContainer.requestFullscreen().catch((err) => {
+      console.error('Ошибка полноэкранного режима:', err);
+    });
+  } else {
+    // Выйти из полноэкранного режима
+    document.exitFullscreen();
+  }
+};
+
+// Отслеживаем изменения полноэкранного режима
+onMounted(() => {
+  document.addEventListener('fullscreenchange', () => {
+    isFullscreen.value = !!document.fullscreenElement;
+  });
+});
 </script>
 
 <style scoped>
@@ -354,5 +426,46 @@ const toggleDubbing = () => {
   border-radius: 50%;
   cursor: pointer;
   border: none;
+}
+
+/* ==========================================
+   РАЗМЕР ФРЕЙМА
+   ========================================== */
+
+.frame-size-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 16px;
+}
+
+.size-label {
+  color: #fff;
+  font-size: 13px;
+  margin-right: 4px;
+  opacity: 0.8;
+}
+
+.size-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  cursor: pointer;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 11px;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.size-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.size-btn.active {
+  background: #2196f3;
+  border-color: #2196f3;
+  font-weight: 600;
 }
 </style>

@@ -1,0 +1,367 @@
+// src/composables/useSpeechSynthesis.js
+
+import { ref, computed, onMounted } from 'vue';
+import { useSettingsStore } from '../stores/settingsStore';
+
+/**
+ * Композабл для управления синтезом речи (Web Speech API)
+ *
+ * Возможности:
+ * - Загрузка доступных голосов ОС
+ * - Озвучивание текста с настройками
+ * - Динамический расчёт темпа речи
+ * - Управление очередью (pause/resume/cancel)
+ *
+ * @returns {Object} API для работы с озвучкой
+ */
+export function useSpeechSynthesis() {
+  const settingsStore = useSettingsStore();
+
+  // ==========================================
+  // СОСТОЯНИЕ
+  // ==========================================
+
+  /**
+   * Все доступные голоса в системе
+   */
+  const availableVoices = ref([]);
+
+  /**
+   * Текущая озвучиваемая фраза (SpeechSynthesisUtterance)
+   */
+  const currentUtterance = ref(null);
+
+  /**
+   * Идёт ли озвучка прямо сейчас
+   */
+  const isSpeaking = ref(false);
+
+  /**
+   * Последний озвученный индекс субтитра (чтобы не повторять)
+   */
+  const lastSpokenIndex = ref(-1);
+
+  // ==========================================
+  // COMPUTED
+  // ==========================================
+
+  /**
+   * Получить текущий выбранный голос (объект SpeechSynthesisVoice)
+   */
+  const selectedVoice = computed(() => {
+    if (!settingsStore.selectedVoiceName) return null;
+
+    return availableVoices.value.find((v) => v.name === settingsStore.selectedVoiceName) || null;
+  });
+
+  /**
+   * Только русские голоса
+   */
+  const russianVoices = computed(() => {
+    return availableVoices.value.filter((voice) => voice.lang.includes('ru') || voice.lang.includes('RU'));
+  });
+
+  /**
+   * Есть ли доступные русские голоса
+   */
+  const hasRussianVoices = computed(() => russianVoices.value.length > 0);
+
+  // ==========================================
+  // ЗАГРУЗКА ГОЛОСОВ
+  // ==========================================
+
+  /**
+   * Загружает список доступных голосов из системы
+   *
+   * Важно: голоса загружаются асинхронно!
+   * На некоторых браузерах нужно дождаться события 'voiceschanged'
+   */
+  // function loadVoices() {
+  //   const voices = speechSynthesis.getVoices();
+
+  //   if (voices.length > 0) {
+  //     availableVoices.value = voices;
+  //     console.log('🎤 Загружено голосов:', voices.length);
+  //     console.log('🇷🇺 Русских голосов:', russianVoices.value.length);
+
+  //     // Если голос не выбран - выбираем первый русский
+  //     if (!settingsStore.selectedVoice && russianVoices.value.length > 0) {
+  //       settingsStore.selectedVoice = russianVoices.value[0];
+  //       settingsStore.saveSettings();
+  //       console.log('✅ Выбран голос по умолчанию:', settingsStore.selectedVoice.name);
+  //     }
+  //   }
+  // }
+  function loadVoices() {
+    const voices = speechSynthesis.getVoices();
+
+    if (voices.length > 0) {
+      availableVoices.value = voices;
+      console.log('🎤 Загружено голосов:', voices.length);
+      console.log('🇷🇺 Русских голосов:', russianVoices.value.length);
+
+      // Если имя голоса сохранено - находим его в списке
+      if (settingsStore.selectedVoiceName) {
+        const savedVoice = voices.find((v) => v.name === settingsStore.selectedVoiceName);
+
+        if (savedVoice) {
+          console.log('✅ Восстановлен голос:', savedVoice.name);
+          // Сохраняем как computed свойство (см. ниже)
+        } else {
+          console.log('⚠️ Сохранённый голос не найден, выбираем новый');
+          selectDefaultVoice();
+        }
+      } else {
+        // Голос не выбран - выбираем первый русский
+        selectDefaultVoice();
+      }
+    }
+  }
+
+  /**
+   * Выбрать голос по умолчанию (первый русский)
+   */
+  function selectDefaultVoice() {
+    if (russianVoices.value.length > 0) {
+      settingsStore.selectedVoiceName = russianVoices.value[0].name;
+      settingsStore.saveSettings();
+      console.log('✅ Выбран голос по умолчанию:', russianVoices.value[0].name);
+    }
+  }
+
+  // ==========================================
+  // РАСЧЁТ ДИНАМИЧЕСКОГО ТЕМПА
+  // ==========================================
+
+  /**
+   * Вычисляет оптимальный темп речи на основе длины текста и времени
+   *
+   * @param {string} text - Текст для озвучки
+   * @param {number} duration - Длительность в секундах
+   * @returns {number} - Темп речи (0.5 - 2.0)
+   */
+  function calculateOptimalRate(text, duration) {
+    // Базовая скорость из настроек
+    let rate = settingsStore.voiceRate;
+
+    // Если авто-темп выключен - возвращаем базовый
+    if (!settingsStore.autoAdjustRate) {
+      return rate;
+    }
+
+    // Вычисляем сколько времени нужно на символ при базовой скорости
+    // Средняя скорость речи: ~12-14 символов/сек при rate=1.0
+    const CHARS_PER_SECOND_AT_RATE_1 = 12;
+
+    // Сколько символов нужно озвучить
+    const textLength = text.length;
+
+    // Сколько времени нужно при базовой скорости
+    const requiredTime = textLength / CHARS_PER_SECOND_AT_RATE_1;
+
+    // Если требуется больше времени чем есть - ускоряем
+    if (requiredTime > duration) {
+      // Вычисляем нужный коэффициент ускорения
+      const speedMultiplier = requiredTime / duration;
+      rate = Math.min(rate * speedMultiplier, 2.0); // Максимум 2.0x
+
+      console.log(`⚡ Ускорение: ${textLength} символов за ${duration.toFixed(1)}s требуют rate=${rate.toFixed(2)}`);
+    } else if (requiredTime < duration * 0.5) {
+      // Если времени много - можно замедлить для лучшей разборчивости
+      rate = Math.max(rate * 0.9, 0.75); // Минимум 0.75x
+    }
+
+    return rate;
+  }
+
+  // ==========================================
+  // ОСНОВНЫЕ МЕТОДЫ
+  // ==========================================
+
+  /**
+   * Озвучить текст
+   *
+   * @param {string} text - Текст для озвучки
+   * @param {Object} options - Опции
+   * @param {number} options.duration - Длительность субтитра (секунды)
+   * @param {number} options.index - Индекс субтитра
+   */
+  function speak(text, options = {}) {
+    const { duration = 3, timeRemaining = duration, index = -1 } = options;
+
+    // Проверяем что озвучка включена
+    if (!settingsStore.isDubbingEnabled) {
+      return;
+    }
+
+    // Проверяем что текст не пустой
+    if (!text || text.trim().length === 0) {
+      return;
+    }
+
+    // Не озвучиваем если это тот же субтитр
+    if (lastSpokenIndex.value === index) {
+      return;
+    }
+
+    // ИСПРАВЛЕНИЕ: Проверяем что предыдущая фраза реально говорит
+    // speechSynthesis.speaking может быть true даже когда звука нет
+    if (window.speechSynthesis.speaking) {
+      // Только отменяем если времени мало
+      if (timeRemaining < 2.0) {
+        console.log('⏭️ Пропуск: слишком мало времени');
+        return;
+      }
+
+      // Отменяем предыдущую фразу
+      window.speechSynthesis.cancel();
+
+      // ВАЖНО: Небольшая задержка для очистки очереди
+      // В Chrome speechSynthesis требует время на очистку
+      setTimeout(() => {
+        actuallySpeak(text, duration, timeRemaining, index);
+      }, 50);
+    } else {
+      // Очередь пуста, говорим сразу
+      actuallySpeak(text, duration, timeRemaining, index);
+    }
+  }
+
+  /**
+   * Внутренняя функция для реальной озвучки
+   */
+  function actuallySpeak(text, duration, timeRemaining, index) {
+    // Создаём новую фразу
+    const utterance = new SpeechSynthesisUtterance(text);
+
+    // Применяем настройки
+    const calculatedRate = calculateOptimalRate(text, timeRemaining);
+    utterance.rate = calculatedRate;
+    utterance.pitch = settingsStore.voicePitch;
+    utterance.volume = settingsStore.voiceVolume / 100;
+    utterance.lang = 'ru-RU';
+
+    // Голос
+    const voice = selectedVoice.value;
+    if (voice) {
+      utterance.voice = voice;
+    }
+
+    // Логи
+    console.log('🎤 Озвучка:', {
+      text: text.substring(0, 40) + '...',
+      rate: utterance.rate.toFixed(2),
+      volume: utterance.volume.toFixed(2),
+      voiceName: voice ? voice.name : 'default',
+    });
+
+    // События
+    utterance.onstart = () => {
+      isSpeaking.value = true;
+      currentUtterance.value = utterance;
+      lastSpokenIndex.value = index;
+      console.log(`✅ Озвучка началась: "${text.substring(0, 30)}..."`);
+    };
+
+    utterance.onend = () => {
+      isSpeaking.value = false;
+      currentUtterance.value = null;
+      console.log('✅ Озвучка завершена');
+    };
+
+    utterance.onerror = (event) => {
+      // Игнорируем нормальные прерывания
+      if (event.error === 'canceled' || event.error === 'interrupted') {
+        console.log('🔄 Озвучка прервана');
+        isSpeaking.value = false;
+        currentUtterance.value = null;
+        return;
+      }
+
+      console.error('❌ Ошибка озвучки:', event.error);
+      isSpeaking.value = false;
+      currentUtterance.value = null;
+    };
+
+    // Запускаем озвучку
+    window.speechSynthesis.speak(utterance);
+    console.log('▶️ speak() вызван');
+  }
+
+  /**
+   * Отменить текущую озвучку
+   */
+  function cancel() {
+    if (speechSynthesis.speaking) {
+      speechSynthesis.cancel();
+      isSpeaking.value = false;
+      currentUtterance.value = null;
+      console.log('🛑 Озвучка отменена');
+    }
+  }
+
+  /**
+   * Приостановить озвучку
+   */
+  function pause() {
+    if (speechSynthesis.speaking && !speechSynthesis.paused) {
+      speechSynthesis.pause();
+      console.log('⏸️ Озвучка приостановлена');
+    }
+  }
+
+  /**
+   * Возобновить озвучку
+   */
+  function resume() {
+    if (speechSynthesis.paused) {
+      speechSynthesis.resume();
+      console.log('▶️ Озвучка возобновлена');
+    }
+  }
+
+  /**
+   * Сбросить состояние (при перемотке)
+   */
+  function reset() {
+    cancel();
+    lastSpokenIndex.value = -1;
+  }
+
+  // ==========================================
+  // LIFECYCLE
+  // ==========================================
+
+  onMounted(() => {
+    // Загружаем голоса при монтировании
+    loadVoices();
+
+    // Подписываемся на событие загрузки голосов
+    // (на некоторых браузерах голоса загружаются асинхронно)
+    if (speechSynthesis.onvoiceschanged !== undefined) {
+      speechSynthesis.onvoiceschanged = loadVoices;
+    }
+  });
+
+  // ==========================================
+  // PUBLIC API
+  // ==========================================
+
+  return {
+    // Состояние
+    availableVoices,
+    russianVoices,
+    hasRussianVoices,
+    isSpeaking,
+    lastSpokenIndex,
+    selectedVoice,
+
+    // Методы
+    speak,
+    cancel,
+    pause,
+    resume,
+    reset,
+    loadVoices,
+  };
+}

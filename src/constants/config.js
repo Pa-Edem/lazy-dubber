@@ -31,7 +31,7 @@ export const APP_CONFIG = {
   // Дефолтные значения для голоса
   DEFAULT_VOICE_RATE: 1.0, // Скорость речи (1.0 = нормально)
   DEFAULT_VOICE_PITCH: 1.0, // Тональность (1.0 = нормально)
-  DEFAULT_VOICE_VOLUME: 1.0, // Громкость (1.0 = 100%)
+  DEFAULT_VOICE_VOLUME: 100, // Громкость
 
   // Автоматический расчёт скорости
   RATE_AUTO_ADJUST: true, // Включить динамический расчёт rate
@@ -40,7 +40,7 @@ export const APP_CONFIG = {
   CHARS_PER_SECOND: 15, // Среднее кол-во символов в секунду при rate=1.0
 
   // === AUDIO DUCKING ===
-  DEFAULT_DUCKING_LEVEL: 0.15, // Громкость видео при озвучке (15%)
+  DEFAULT_DUCKING_LEVEL: 15, // Громкость видео при озвучке
   DUCKING_FADE_DURATION_MS: 300, // Плавное затухание/нарастание звука
 
   // === ИНТЕРФЕЙС ===

@@ -17,6 +17,8 @@ lazy-dubber
 │  │  ├─ FileUploadZone.vue
 │  │  ├─ PlayerControls.vue
 │  │  ├─ SubtitlesSidebar.vue
+│  │  ├─ TestGemini.vue
+│  │  ├─ TranslationProgress.vue
 │  │  └─ VideoPlayer.vue
 │  ├─ composables
 │  │  ├─ useFileUpload.js
@@ -29,11 +31,15 @@ lazy-dubber
 │  ├─ router
 │  │  └─ index.js
 │  ├─ services
+│  │  ├─ api
+│  │  │  └─ geminiApi.js
+│  │  └─ translationService.js
 │  ├─ stores
 │  │  ├─ filesStore.js
 │  │  ├─ playerStore.js
 │  │  ├─ settingsStore.js
 │  │  └─ subtitlesStore.js
+│  ├─ test-gemini.js
 │  ├─ utils
 │  │  └─ timeFormatter.js
 │  └─ views

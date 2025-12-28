@@ -41,6 +41,7 @@ Thumbs.db
 *.tmp
 *.temp
 .cache/
+.backup
 
 # === Firebase (добавим позже) ===
 .firebase/
@@ -55,3 +56,9 @@ firestore-debug.log
 *.mkv
 *.webm
 *.vtt
+/public/*.mp4
+/public/*.mkv
+
+# Build outputs
+/dist/
+/build/

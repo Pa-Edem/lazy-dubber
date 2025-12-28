@@ -22,6 +22,11 @@
 
     <button v-if="hasError" @click="$emit('retry')" class="retry-button">Повторить попытку</button>
   </div>
+  <!-- Если файл уже переведён -->
+  <div v-if="isAlreadyTranslated" class="translation-complete">
+    <div class="complete-icon">✅</div>
+    <p class="complete-text">Субтитры уже переведены (загружен готовый файл)</p>
+  </div>
 </template>
 
 <script setup>
@@ -44,6 +49,7 @@ const props = defineProps({
     type: Number,
     default: 0,
   },
+  isAlreadyTranslated: Boolean,
 });
 
 defineEmits(['retry']);
@@ -167,5 +173,8 @@ const detailText = computed(() => {
 
 .retry-button:hover {
   transform: translateY(-2px);
+}
+.complete-text {
+  color: #764ba2;
 }
 </style>

@@ -1,9 +1,8 @@
 <!-- src/components/VideoPlayer.vue -->
-
 <template>
   <div class="video-player" v-if="playerStore.isReady">
     <!-- Контейнер для видео -->
-    <div class="video-container">
+    <div class="video-container" :style="{ width: settingsStore.videoFrameWidth + '%' }">
       <video
         ref="videoElement"
         :src="playerStore.videoUrl"
@@ -24,7 +23,7 @@
     </div>
 
     <!-- Информационная панель -->
-    <div class="video-info">
+    <div class="video-info" :style="{ width: settingsStore.videoFrameWidth + '%' }">
       <div class="video-title">
         {{ playerStore.videoFile?.name || 'Видео загружено' }}
       </div>
@@ -44,6 +43,7 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, provide, watch } from 'vue';
+import { useSettingsStore } from '../stores/settingsStore';
 import { usePlayerStore } from '../stores/playerStore';
 import { useVideoPlayer } from '../composables/useVideoPlayer';
 import PlayerControls from './PlayerControls.vue';
@@ -51,7 +51,7 @@ import PlayerControls from './PlayerControls.vue';
 // ==========================================
 // STORES И COMPOSABLES
 // ==========================================
-
+const settingsStore = useSettingsStore();
 const playerStore = usePlayerStore();
 
 /**
@@ -170,6 +170,7 @@ onUnmounted(() => {
 
 .video-player {
   width: 100%;
+  height: 100vh;
   max-width: 1200px;
   margin: 0 auto;
 }
@@ -181,9 +182,22 @@ onUnmounted(() => {
 .video-container {
   position: relative;
   width: 100%;
+  max-width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 0 auto;
   background: #000;
   border-radius: 8px;
   overflow: hidden;
+  transition: width 0.3s ease;
+}
+
+/* Полноэкранный режим */
+.video-container:fullscreen {
+  width: 100% !important;
+  max-width: 100% !important;
+  border-radius: 0;
 }
 
 .video-element {
@@ -220,14 +234,25 @@ onUnmounted(() => {
 /* ==========================================
    ИНФОРМАЦИОННАЯ ПАНЕЛЬ
    ========================================== */
-
+.video-container {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+  background: #000;
+  border-radius: 8px 8px 0 0;
+  overflow: hidden;
+  transition: width 0.3s ease;
+}
 .video-info {
+  margin: 0 auto;
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
   background: #f5f5f5;
   border-radius: 0 0 8px 8px;
+  transition: width 0.3s ease;
 }
 
 .video-title {

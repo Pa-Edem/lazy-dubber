@@ -3,11 +3,7 @@
   <div class="app-container">
     <main class="main">
       <!-- Шапка приложения -->
-      <AppHeader
-        :subtitlesVisible="subtitlesVisible"
-        @openSettings="isSettingsOpen = true"
-        @toggleSubtitles="subtitlesVisible = !subtitlesVisible"
-      />
+      <AppHeader @openSettings="isSettingsOpen = true" />
 
       <!-- Основной контент -->
       <RouterView />
@@ -19,7 +15,7 @@
 </template>
 
 <script setup>
-import { ref, provide, onMounted } from 'vue';
+import { ref, onMounted } from 'vue';
 import { RouterView } from 'vue-router';
 import { useSettingsStore } from './stores/settingsStore';
 import AppHeader from './components/AppHeader.vue';
@@ -31,30 +27,9 @@ const settingsStore = useSettingsStore();
 // Состояние модалки
 const isSettingsOpen = ref(false);
 
-// Состояние видимости субтитров
-const subtitlesVisible = ref(false);
-
-// Предоставляем состояние дочерним компонентам
-provide('subtitlesVisible', subtitlesVisible);
-
-function handleKeydown(event) {
-  // Ctrl+, или Cmd+, — открыть настройки
-  if ((event.ctrlKey || event.metaKey) && event.key === ',') {
-    event.preventDefault();
-    isSettingsOpen.value = true;
-  }
-
-  // Escape — закрыть настройки
-  if (event.key === 'Escape' && isSettingsOpen.value) {
-    isSettingsOpen.value = false;
-  }
-}
-
 onMounted(() => {
   settingsStore.loadSettings();
   console.log('⚙️ Настройки загружены!');
-
-  window.addEventListener('keydown', handleKeydown);
 });
 </script>
 

@@ -1,109 +1,108 @@
 <!-- src/views/UploadView.vue -->
 <template>
   <div class="upload-view">
-    <!-- ЭКРАН 1: Загрузка файлов (показываем ЕСЛИ плеер не готов) -->
-    <div v-if="!playerStore.isReady" class="upload-screen">
-      <!-- Заголовок страницы -->
-      <header class="upload-view__header">
-        <h1 class="upload-view__title">Lazy Dubber</h1>
-        <p class="upload-view__subtitle">Загрузите видео и субтитры для начала работы</p>
-      </header>
-
-      <!-- Зоны загрузки -->
-      <div class="upload-view__zones">
-        <FileUploadZone file-type="video" title="Видео файл" />
-        <FileUploadZone file-type="vtt" title="Файл субтитров (.vtt)" />
-      </div>
-
-      <!-- Предупреждение о несовпадении имён -->
-      <transition name="warning">
-        <div v-if="showNamesMismatchWarning" class="upload-view__warning">
-          <div class="warning-card">
-            <div class="warning-card__icon">⚠️</div>
-            <div class="warning-card__content">
-              <h3 class="warning-card__title">Имена файлов не совпадают</h3>
-              <p class="warning-card__text">
-                Видео: <strong>{{ videoFileName }}</strong
-                ><br />
-                Субтитры: <strong>{{ vttFileName }}</strong>
-              </p>
-              <p class="warning-card__hint">
-                Рекомендуется использовать одинаковые имена для корректной синхронизации. Вы можете продолжить, но
-                возможны проблемы.
-              </p>
-            </div>
-          </div>
+    <!-- Основной контент -->
+    <div class="main-content" :class="{ 'with-sidebar': subtitlesVisible }">
+      <!-- ЭКРАН 1: Загрузка файлов (показываем ЕСЛИ плеер не готов) -->
+      <div v-if="!playerStore.isReady" class="upload-screen">
+        <!-- Описание -->
+        <div class="upload-view__description">
+          <p class="upload-view__subtitle">Загрузите видео и субтитры для начала работы</p>
         </div>
-      </transition>
+        <!-- Зоны загрузки -->
+        <div class="upload-view__zones">
+          <FileUploadZone file-type="video" title="Видео файл" />
+          <FileUploadZone file-type="vtt" title="Файл субтитров (.vtt)" />
+        </div>
 
-      <!-- Информация о загруженных файлах -->
-      <transition name="fade">
-        <div v-if="showFilesInfo" class="upload-view__info">
-          <div class="info-card">
-            <h3 class="info-card__title">✓ Файлы загружены</h3>
-            <div class="info-card__details">
-              <div class="info-item">
-                <span class="info-item__label">Видео:</span>
-                <span class="info-item__value">{{ videoFileName }}</span>
-              </div>
-              <div class="info-item">
-                <span class="info-item__label">Субтитры:</span>
-                <span class="info-item__value">{{ vttFileName }}</span>
+        <!-- Предупреждение о несовпадении имён -->
+        <transition name="warning">
+          <div v-if="showNamesMismatchWarning" class="upload-view__warning">
+            <div class="warning-card">
+              <div class="warning-card__icon">⚠️</div>
+              <div class="warning-card__content">
+                <h3 class="warning-card__title">Имена файлов не совпадают</h3>
+                <p class="warning-card__text">
+                  Видео: <strong>{{ videoFileName }}</strong
+                  ><br />
+                  Субтитры: <strong>{{ vttFileName }}</strong>
+                </p>
+                <p class="warning-card__hint">
+                  Рекомендуется использовать одинаковые имена для корректной синхронизации. Вы можете продолжить, но
+                  возможны проблемы.
+                </p>
               </div>
             </div>
           </div>
+        </transition>
+
+        <!-- Информация о загруженных файлах -->
+        <transition name="fade">
+          <div v-if="showFilesInfo" class="upload-view__info">
+            <div class="info-card">
+              <h3 class="info-card__title">✓ Файлы загружены</h3>
+              <div class="info-card__details">
+                <div class="info-item">
+                  <span class="info-item__label">Видео:</span>
+                  <span class="info-item__value">{{ videoFileName }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-item__label">Субтитры:</span>
+                  <span class="info-item__value">{{ vttFileName }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </transition>
+
+        <!-- Прогресс перевода -->
+        <TranslationProgress
+          v-if="subtitlesStore.hasSubtitles"
+          :is-translating="isTranslating"
+          :progress="translationProgress"
+          :error="translationError"
+          :total-subtitles="totalSubtitles"
+          :is-already-translated="isFileAlreadyTranslated"
+          @retry="retryTranslation"
+        />
+
+        <!-- Кнопка для перехода к следующему этапу -->
+        <div class="upload-view__actions">
+          <button
+            class="btn-primary"
+            :class="{ 'btn-primary--disabled': !canProceed }"
+            :disabled="!canProceed"
+            @click="handleProceed"
+          >
+            {{ buttonText }}
+          </button>
+
+          <p v-if="!canProceed" class="upload-view__hint">Загрузите оба файла для продолжения</p>
         </div>
-      </transition>
-
-      <!-- Прогресс перевода -->
-      <TranslationProgress
-        v-if="subtitlesStore.hasSubtitles"
-        :is-translating="isTranslating"
-        :progress="translationProgress"
-        :error="translationError"
-        :total-subtitles="totalSubtitles"
-        @retry="retryTranslation"
-      />
-
-      <!-- Кнопка для перехода к следующему этапу -->
-      <div class="upload-view__actions">
-        <button
-          class="btn-primary"
-          :class="{ 'btn-primary--disabled': !canProceed }"
-          :disabled="!canProceed"
-          @click="handleProceed"
-        >
-          {{ buttonText }}
-        </button>
-
-        <p v-if="!canProceed" class="upload-view__hint">Загрузите оба файла для продолжения</p>
       </div>
+      <!-- ЭКРАН 2: Плеер (показываем ЕСЛИ плеер готов) -->
+      <div v-else class="player-screen">
+        <!-- Кнопка "Назад" -->
+        <button class="back-button" @click="handleBack">← Загрузить другие файлы</button>
 
-      <!-- Сайдбар субтитров (для этапа 3) -->
-      <SubtitlesSidebar />
+        <!-- Основная область с плеером и субтитрами -->
+        <div class="player-layout">
+          <!-- Видеоплеер -->
+          <div class="player-section">
+            <VideoPlayer />
+          </div>
+        </div>
+      </div>
     </div>
-
-    <!-- ЭКРАН 2: Плеер (показываем ЕСЛИ плеер готов) -->
-    <div v-else class="player-screen">
-      <!-- Кнопка "Назад" -->
-      <button class="back-button" @click="handleBack">← Загрузить другие файлы</button>
-
-      <!-- Основная область с плеером и субтитрами -->
-      <div class="player-layout">
-        <!-- Видеоплеер -->
-        <div class="player-section">
-          <VideoPlayer />
-        </div>
-      </div>
-
-      <!-- Сайдбар субтитров -->
+    <!-- Сайдбар с субтитрами -->
+    <div v-if="subtitlesVisible" class="sidebar-section">
       <SubtitlesSidebar />
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, inject } from 'vue';
 import { useFilesStore } from '../stores/filesStore';
 import { usePlayerStore } from '../stores/playerStore';
 import { useSubtitlesStore } from '../stores/subtitlesStore';
@@ -119,6 +118,7 @@ const playerStore = usePlayerStore();
 const subtitlesStore = useSubtitlesStore();
 const { parseVttText } = useVttParser();
 
+const subtitlesVisible = inject('subtitlesVisible');
 // ========== Состояние перевода ==========
 const translationProgress = ref(0);
 const translationError = ref(null);
@@ -127,6 +127,11 @@ const isParsingVtt = ref(false);
 // ==========================================
 // COMPUTED PROPERTIES
 // ==========================================
+
+const isFileAlreadyTranslated = computed(() => {
+  const vttFileName = filesStore.vtt.file?.name || '';
+  return vttFileName.toLowerCase().endsWith('_ru.vtt') || vttFileName.toLowerCase().endsWith('.ru.vtt');
+});
 
 /**
  * Проверяем, можно ли перейти к следующему этапу
@@ -138,9 +143,28 @@ const canProceed = computed(() => {
 
 /**
  * Показывать ли предупреждение о несовпадении имён
+ * НЕ показываем если:
+ * - Файлы совпадают
+ * - VTT файл переведённый (_ru или .ru)
  */
 const showNamesMismatchWarning = computed(() => {
-  return filesStore.video.file && filesStore.vtt.file && !filesStore.namesMatch;
+  // Если один из файлов не загружен - не показываем
+  if (!filesStore.video.file || !filesStore.vtt.file) {
+    return false;
+  }
+
+  // Проверяем: это переведённый VTT?
+  const vttFileName = filesStore.vtt.file.name || '';
+  const isTranslatedVtt =
+    vttFileName.toLowerCase().endsWith('_ru.vtt') || vttFileName.toLowerCase().endsWith('.ru.vtt');
+
+  // Если это переведённый файл - не показываем предупреждение
+  if (isTranslatedVtt) {
+    return false;
+  }
+
+  // Иначе показываем если имена не совпадают
+  return !filesStore.namesMatch;
 });
 
 /**
@@ -219,8 +243,8 @@ const handleProceed = async () => {
     // Читаем VTT файл как текст
     const vttText = await readFileAsText(filesStore.vtt.file);
 
-    // Парсим VTT
-    const parseResult = await parseVttText(vttText);
+    // Парсим VTT (передаём имя файла для определения типа)
+    const parseResult = await parseVttText(vttText, filesStore.vtt.file.name);
 
     if (!parseResult.success) {
       alert(`Ошибка парсинга VTT: ${parseResult.error}`);
@@ -231,7 +255,23 @@ const handleProceed = async () => {
     console.log('✅ VTT parsed:', parseResult.data.length, 'subtitles');
     isParsingVtt.value = false;
 
-    // Запускаем перевод
+    // ========== ПРОВЕРЯЕМ: ЭТО ПЕРЕВЕДЁННЫЙ ФАЙЛ? ==========
+    if (parseResult.isTranslated) {
+      console.log('🎉 Это уже переведённый файл, перевод не требуется!');
+
+      // Устанавливаем прогресс = 100%
+      translationProgress.value = 100;
+      subtitlesStore.setTranslatingStatus(false);
+
+      // Копируем файлы в playerStore и переходим к плееру
+      playerStore.setVideoFile(filesStore.video.file);
+      playerStore.setVttFile(filesStore.vtt.file);
+
+      return; // Завершаем без запуска перевода
+    }
+    // ========================================================
+
+    // Запускаем перевод (только для оригинальных файлов)
     await startTranslation();
 
     // Копируем файлы в playerStore
@@ -333,9 +373,31 @@ function retryTranslation() {
 
 <style scoped>
 .upload-view {
-  min-height: 100vh;
+  min-height: calc(100vh - 60px); /* 60px = высота header */
+  display: flex;
+  gap: 20px;
+  padding: 20px;
+  background: #f7fafc;
 }
 
+.main-content {
+  flex: 1;
+  transition: all 0.3s ease;
+}
+/* Когда сайдбар видим - ограничиваем ширину */
+.main-content.with-sidebar {
+  max-width: calc(100% - 420px); /* 400px сайдбар + 20px gap */
+}
+
+/* Сайдбар (зелёная область) */
+.sidebar-section {
+  width: 400px;
+  min-width: 400px;
+  height: calc(100vh - 100px); /* 60px header + 40px padding */
+  position: sticky;
+  top: 80px; /* 60px header + 20px padding */
+  transition: all 0.3s ease;
+}
 /* ==========================================
    ЭКРАН ЗАГРУЗКИ
    ========================================== */
@@ -346,26 +408,14 @@ function retryTranslation() {
   padding: 2rem;
 }
 
-/* Заголовок */
-.upload-view__header {
+.upload-view__description {
   text-align: center;
-  margin-bottom: 3rem;
-}
-
-.upload-view__title {
-  font-size: 2.5rem;
-  font-weight: 700;
-  color: #1a202c;
-  margin-bottom: 0.5rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  margin-bottom: 2rem;
 }
 
 .upload-view__subtitle {
   font-size: 1.1rem;
-  color: #718096;
+  color: hsl(220, 100%, 96%);
 }
 
 /* Зоны загрузки */
@@ -481,7 +531,7 @@ function retryTranslation() {
 
 .btn-primary {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  color: hsl(250, 50%, 40%);
   border: none;
   padding: 1rem 3rem;
   font-size: 1.1rem;
@@ -509,7 +559,7 @@ function retryTranslation() {
 
 .upload-view__hint {
   margin-top: 1rem;
-  color: #718096;
+  color: hsl(220, 50%, 20%);
   font-size: 0.9rem;
 }
 
@@ -518,7 +568,7 @@ function retryTranslation() {
    ========================================== */
 
 .player-screen {
-  padding: 20px;
+  width: 100%;
   min-height: 100vh;
 }
 
@@ -548,6 +598,8 @@ function retryTranslation() {
 
 .player-section {
   width: 100%;
+  height: 100vh;
+  overflow: hidden;
 }
 
 /* Анимации переходов */

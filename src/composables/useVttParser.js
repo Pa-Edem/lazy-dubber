@@ -1,17 +1,32 @@
+// src/composables/useVttParser.js
 import { WebVTTParser } from 'webvtt-parser';
 import { useSubtitlesStore } from '../stores/subtitlesStore';
+
+/**
+ * Проверяет, является ли VTT файл уже переведённым
+ * @param {string} filename - Имя файла
+ * @returns {boolean}
+ */
+function isTranslatedVtt(filename) {
+  if (!filename) return false;
+
+  const lowerName = filename.toLowerCase();
+  return lowerName.endsWith('_ru.vtt') || lowerName.endsWith('.ru.vtt');
+}
 
 /**
  * Композабл для парсинга VTT текста
  */
 export function useVttParser() {
   const subtitlesStore = useSubtitlesStore();
+
   /**
    * Парсит VTT текст и возвращает массив субтитров
    * @param {string} vttText - Содержимое VTT файла как строка
-   * @returns {Promise<{success: boolean, data: Array, error: string|null}>}
+   * @param {string} filename - Имя VTT файла (для определения типа)
+   * @returns {Promise<{success: boolean, data: Array, error: string|null, isTranslated: boolean}>}
    */
-  async function parseVttText(vttText) {
+  async function parseVttText(vttText, filename = '') {
     try {
       // Проверяем что текст не пустой
       if (!vttText || vttText.trim().length === 0) {
@@ -19,7 +34,17 @@ export function useVttParser() {
           success: false,
           data: [],
           error: 'VTT текст пустой',
+          isTranslated: false,
         };
+      }
+
+      // Определяем тип файла
+      const isTranslated = isTranslatedVtt(filename);
+
+      if (isTranslated) {
+        console.log('🇷🇺 Обнаружен переведённый VTT файл:', filename);
+      } else {
+        console.log('🇬🇧 Обнаружен оригинальный VTT файл:', filename);
       }
 
       // Сохраняем VTT контент для кэширования
@@ -44,6 +69,7 @@ export function useVttParser() {
           success: false,
           data: [],
           error: 'В VTT файле не найдено субтитров',
+          isTranslated: false,
         };
       }
 
@@ -60,10 +86,27 @@ export function useVttParser() {
       subtitlesStore.setSubtitles(subtitles);
       console.log('[useVttParser] Subtitles saved to store:', subtitles.length);
 
+      // ========== ЕСЛИ ЭТО ПЕРЕВЕДЁННЫЙ ФАЙЛ ==========
+      if (isTranslated) {
+        // Сразу заливаем текст в translations
+        const translations = {};
+        subtitles.forEach((subtitle, index) => {
+          translations[index] = subtitle.text;
+        });
+
+        // Обновляем store
+        subtitlesStore.updateTranslations(translations);
+        subtitlesStore.setTranslationProgress(100);
+
+        console.log('✅ Переводы загружены из файла:', Object.keys(translations).length);
+      }
+      // ================================================
+
       return {
         success: true,
         data: subtitles,
         error: null,
+        isTranslated: isTranslated, // Флаг для UploadView
       };
     } catch (error) {
       console.error('VTT parsing error:', error);
@@ -73,6 +116,7 @@ export function useVttParser() {
         success: false,
         data: [],
         error: `Ошибка парсинга VTT: ${error.message}`,
+        isTranslated: false,
       };
     }
   }
